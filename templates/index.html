@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Random Article App</title>
+</head>
+<body>
+<div id="content">
+    <h1>Random Article</h1>
+    <p id="article-content"></p>
+    <button onclick="startRecording()">Start Recording</button>
+    <button onclick="stopRecording()">Stop Recording</button>
+    <div id="audio-player-container">
+        <audio controls id="audio-player"></audio>
+    </div>
+</div>
+
+
+<script>
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        function getRandomArticle() {
+            fetch('/get_random_article')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('article-content').innerText = data.article;
+                    getRecordingStatus();
+                });
+        }
+
+        function startRecording() {
+            fetch('/start_recording', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    recordedChunks = [];
+                    const streamPromise = navigator.mediaDevices.getUserMedia({ audio: true });
+
+                    streamPromise.then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+
+                        mediaRecorder.ondataavailable = event => {
+                            if (event.data.size > 0) {
+                                recordedChunks.push(event.data);
+                            }
+                        };
+
+                        mediaRecorder.onstop = () => {
+                            const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+                            const audioUrl = URL.createObjectURL(blob);
+                            document.getElementById('audio-player').src = audioUrl;
+
+                            // Отправляем запись в Firebase сразу после остановки записи
+                            sendRecording();
+                        };
+
+                        mediaRecorder.start();
+                    });
+                });
+        }
+
+        function stopRecording() {
+            fetch('/stop_recording', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    mediaRecorder.stop();
+                    getRecordingStatus();
+                });
+        }
+        function sendRecording() {
+            fetch('/send_to_firebase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ audioData: recordedChunks[0] }),
+            })
+            .then(response => response.json())
+            .then(firebaseData => {
+                console.log('Recording sent to Firebase:', firebaseData);
+
+                // Дополнительная обработка, если необходимо
+            });
+        }
+        function sendRecording() {
+            console.log('Recorded Chunks:', recordedChunks);
+            fetch('/send_to_firebase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ audioData: recordedChunks[0] }),
+            })
+            .then(response => response.json())
+            .then(firebaseData => {
+                console.log('Recording sent to Firebase:', firebaseData);
+
+                // Дополнительная обработка, если необходимо
+            });
+        }
+
+        function getRecordingStatus() {
+            fetch('/get_recording_status')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Recording status:', data.recording);
+                    // Ваш код обработки статуса записи здесь
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            getRandomArticle();
+        });
+
+
+
+</script>
+</body>
+</html>
